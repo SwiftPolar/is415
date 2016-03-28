@@ -17,6 +17,9 @@ import MenuItem from 'material-ui/lib/menus/menu-item';
 import RaisedButton from 'material-ui/lib/raised-button';
 import LinearProgress from 'material-ui/lib/linear-progress';
 
+import List from 'material-ui/lib/lists/list';
+import ListItem from 'material-ui/lib/lists/list-item';
+
 var location, categories = [];
 
 
@@ -36,6 +39,7 @@ export default class extends React.Component {
                 walking: null
             },
             results: "Submit a request first!",
+            resultsArr: [],
             loading: 0
         };
 
@@ -56,6 +60,13 @@ export default class extends React.Component {
         window.addEventListener("resize", this.updateSidebar.bind(this));
         L.Icon.Default.imagePath = 'packages/bevanhunt_leaflet/images';
         map = L.map('map').setView([1.3553, 103.7968], 12);
+        map.on('popupopen', (event) => {
+            let popup = event.popup;
+            let latlng = popup.getLatLng();
+            this.setState({
+                target: latlng
+            });
+        });
 
         L.tileLayer.provider('OpenStreetMap.Mapnik').addTo(map);
 
@@ -92,6 +103,7 @@ export default class extends React.Component {
     inputLocation(event) {
         if (event.keyCode === 13) {
             search.GetLocations(event.target.value + ", Singapore", (data) => {
+                console.log(data);
                 let lat = data[0].Y;
                 let lng = data[0].X;
                 location.setLatLng([lat, lng]);
@@ -141,6 +153,33 @@ export default class extends React.Component {
                 ))}
             </SelectField>
         );
+    }
+
+    getDirections() {
+        console.log("FROM: " + this.state.lat + "," + this.state.lng + " TO: " + this.state.target);
+    }
+
+    getResults() {
+        let arr = this.state.resultsArr;
+        if(arr.length > 0) {
+            let results = [];
+            arr.map((obj) => {
+                results.push(
+                    <ListItem
+                        key={obj._id}
+                        primaryText={obj.properties.name}
+                        secondaryText={obj.properties.popup}
+                        secondaryTextLines={2}
+                    />
+                );
+            });
+
+            return (
+                <List>
+                    {results.map((obj) => (obj))}
+                </List>
+            );
+        }
     }
 
     submitForm() {
@@ -200,6 +239,8 @@ export default class extends React.Component {
                                 onEachFeature: onEachFeature,
                                 style: {"color": "red"}
                             }).addTo(map);
+
+                            this.setState({resultsArr: res});
                         })
 
                     } else if(this.state.loading < res) {
@@ -237,6 +278,8 @@ export default class extends React.Component {
                                     fullWidth={true}
                                 />
                             </CardText>
+                            <RaisedButton label="Get Current Location" secondary={true} fullWidth={true}
+                                          onTouchTap={this.getCurrentLocation.bind(this)}/>
                         </Card>
                         <Card>
                             <CardHeader
@@ -306,6 +349,7 @@ export default class extends React.Component {
                                 {this.state.results}
                             </CardText>
                         </Card>
+                        {this.getResults()}
 
                     </LeftNav>
                 </div>
