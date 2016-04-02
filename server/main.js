@@ -11,6 +11,7 @@ var getBusID = function (obj) {
 };
 
 var userRequest = {};
+var requestHistory = {};
 
 Meteor.methods({
     getCategories: () => {
@@ -18,20 +19,37 @@ Meteor.methods({
         let distinct = Meteor.wrapAsync(raw.distinct, raw);
         return distinct('properties.category');
     },
-    test: function (startLocation, numStops, routeChange) {
-        let requestId = this.connection.id;
-        console.log(startLocation);
-    },
     getStops: function (startLocation, numStops, routeChange, walking, category) {
         this.unblock();
         let requestId = this.connection.id;
-        if (userRequest[requestId] !== undefined) {
-            return userRequest[requestId];
-        } else if (typeof userRequest[requestId] === "object") {
-            //new request
-            userRequest[requestId] = 0;
+        if (userRequest[requestId]) {
+            if (typeof userRequest[requestId] === "object") {
+                //new request check if request only changes the category
+                let past = requestHistory[requestId];
+                if (past.start.lat == startLocation.lat && past.start.lng == startLocation.lng
+                    && past.stops === numStops && past.change === routeChange
+                    && past.walking === walking) {
+                    //only category has changed so we use same bus stops
+                    requestHistory[requestId]["category"] = category;
+                    let busCoords = past.bus;
+                    userRequest[requestId] = 50;
+                    userRequest[requestId] = Meteor.call('getPoi', busCoords, category, walking);
+                    return userRequest[requestId];
+                } else {
+                    userRequest[requestId] = 0;
+                }
+            } else {
+                return userRequest[requestId];
+            }
         } else {
             userRequest[requestId] = 0;
+            requestHistory[requestId] = {
+                start: startLocation,
+                stops: numStops,
+                change: routeChange,
+                walking: walking,
+                category: category
+            };
         }
 
         //initialize variables
@@ -258,6 +276,24 @@ Meteor.methods({
         //now results key contains all bus stop codes that we need to search
         // we will now search the location coordinates for each bus stop
         let busCoords = Meteor.call('getBusCoords', Object.keys(results));
+        requestHistory[requestId]["bus"] = busCoords;
+        userRequest[requestId]  = Meteor.call('getPoi', busCoords, category, walking);
+    },
+
+    getResults: function () {
+        return userRequest[this.connection.id];
+    },
+
+    getBusCoords: function (stops) {
+        let arr = BusStops.find({"id": {"$in": stops}}, {fields: {"geometry.coordinates": 1}}).fetch();
+        results = [];
+        arr.map((val) => {
+            results.push(val.geometry.coordinates);
+        });
+        return results;
+    },
+
+    getPoi: function (busCoords, category, walking) {
         let ids = {};
         let poi = [];
         busCoords.map((coords) => {
@@ -275,29 +311,14 @@ Meteor.methods({
             }).fetch();
             temp.map((obj) => {
                 let id = obj._id;
-                if(!ids[id]) {
+                if (!ids[id]) {
                     ids[id] = true;
                     poi.push(obj);
                 }
             });
 
         });
-
-        userRequest[requestId] = poi;
-
-    },
-
-    getResults: function () {
-        return userRequest[this.connection.id];
-    },
-
-    getBusCoords: function (stops) {
-        let arr = BusStops.find({"id": {"$in": stops}}, {fields: {"geometry.coordinates": 1}}).fetch();
-        results = [];
-        arr.map((val) => {
-            results.push(val.geometry.coordinates);
-        });
-        return results;
+        return poi;
     },
 
     getConnection: function () {

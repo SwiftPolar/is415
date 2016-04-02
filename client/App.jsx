@@ -52,7 +52,7 @@ export default class extends React.Component {
 
     componentWillMount() {
         Meteor.call('getCategories', (err, res) => {
-            categories = res;
+            categories = res.sort();
         });
     }
 
@@ -94,8 +94,6 @@ export default class extends React.Component {
                 Meteor.clearInterval(initialUpdate);
             }
         }, 1000);
-
-
 
 
     }
@@ -161,14 +159,20 @@ export default class extends React.Component {
 
     getResults() {
         let arr = this.state.resultsArr;
-        if(arr.length > 0) {
+
+        const parseHtml = (html) => {
+            var el = document.createElement('div');
+            el.innerHTML = html;
+            return el.childNodes[0];
+        };
+
+        if (arr.length > 0) {
             let results = [];
             arr.map((obj) => {
                 results.push(
                     <ListItem
                         key={obj._id}
                         primaryText={obj.properties.name}
-                        secondaryText={obj.properties.popup}
                         secondaryTextLines={2}
                     />
                 );
@@ -210,10 +214,23 @@ export default class extends React.Component {
         if (haveErr) {
             this.setState({error: err});
         } else {
+
+            //remove any previous results
+            let userMarker = location.getLatLng();
+            map.eachLayer((layer) => {
+                if(layer._latlng) {
+                    let latlng = layer._latlng;
+                    if(latlng != userMarker) {
+                        map.removeLayer(layer);
+                    }
+                }
+            });
+            this.setState({resultsArr: []});
+
             this.setState({results: "In Progress!", loading: 0});
             Meteor.call('getStops', {lat: this.state.lat, lng: this.state.lng},
                 this.state.inputStops, this.state.inputChanges, this.state.inputWalking, this.state.category
-                );
+            );
             let loadProgress = Meteor.setInterval(() => {
                 Meteor.call('getResults', (err, res) => {
                     if (typeof res === "object") {
@@ -223,10 +240,18 @@ export default class extends React.Component {
                         this.setState({results: "Completed", loading: 1});
                         Meteor.call('getResults', (err, res) => {
                             console.log("PROCESSING POI");
-                            const onEachFeature = function(feature, layer) {
+                            const onEachFeature = function (feature, layer) {
                                 // does this feature have a property named popupContent?
                                 if (feature.properties && feature.properties.popup) {
-                                    layer.bindPopup(feature.properties.popup);
+                                    let popup = feature.properties.popup;
+                                    if (popup.indexOf("<strong>") < 0) {
+                                        popup = "<p><strong>" + feature.properties.name + "</p></strong>" +
+                                            "<p>" + popup + "</p>";
+                                        layer.bindPopup(popup);
+                                    } else {
+                                        layer.bindPopup(popup);
+                                    }
+
                                 }
                             };
 
@@ -236,14 +261,13 @@ export default class extends React.Component {
                             };
 
                             L.geoJson(geojsonFeature, {
-                                onEachFeature: onEachFeature,
-                                style: {"color": "red"}
+                                onEachFeature: onEachFeature
                             }).addTo(map);
 
                             this.setState({resultsArr: res});
                         })
 
-                    } else if(this.state.loading < res) {
+                    } else if (this.state.loading < res) {
                         this.setState({loading: res});
                     } else {
                         this.setState({loading: this.state.loading + 0.01});
