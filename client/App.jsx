@@ -20,7 +20,7 @@ import LinearProgress from 'material-ui/lib/linear-progress';
 import List from 'material-ui/lib/lists/list';
 import ListItem from 'material-ui/lib/lists/list-item';
 
-var location, categories = [];
+var location;
 
 
 export default class extends React.Component {
@@ -29,7 +29,7 @@ export default class extends React.Component {
         super(props);
 
         this.state = {
-            categories: categories,
+            categories: [],
             sidebar: true,
             sidebarWidth: window.innerWidth * 0.2,
             error: {
@@ -50,11 +50,6 @@ export default class extends React.Component {
         this.setState({sidebarWidth: window.innerWidth * 0.2});
     }
 
-    componentWillMount() {
-        Meteor.call('getCategories', (err, res) => {
-            categories = res.sort();
-        });
-    }
 
     componentDidMount() {
         window.addEventListener("resize", this.updateSidebar.bind(this));
@@ -88,12 +83,10 @@ export default class extends React.Component {
 
             })
         }
-        initialUpdate = Meteor.setInterval(() => {
-            if (categories.keys().length !== 0) {
-                this.setState({categories: categories, category: categories[0]});
-                Meteor.clearInterval(initialUpdate);
-            }
-        }, 1000);
+
+        Meteor.call('getCategories', (err, res) => {
+            this.setState({categories: res.sort()});
+        });
 
 
     }
