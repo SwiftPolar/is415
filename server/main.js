@@ -59,6 +59,7 @@ Meteor.methods({
         var stops = {};
 
         function start(cb) {
+            /*
             //Get all bus stops within distance of starting point
             var start = BusStops.find({
                 "geometry": {
@@ -75,8 +76,32 @@ Meteor.methods({
                 }
             }, {fields: {"id": 1, "_id": 0}}).fetch();
 
+             //change bus stops into just bus code id
+
+             start = getBusID(start);
+             start.map((id) => {
+             results[id] = null;
+             });
+
+            */
+
+            //Get one closest bus stop from user's current location
+            var start = BusStops.findOne({
+                "geometry": {
+                    "$near": {
+                        "$geometry": {
+                            "type": "Point",
+                            "coordinates": [
+                                startLocation.lng,
+                                startLocation.lat
+                            ]
+                        }
+                    }
+                }
+            }, {fields: {"id": 1, "_id": 0}});
+
             //change bus stops into just bus code id
-            start = getBusID(start);
+            start = getBusID([start]);
             start.map((id) => {
                 results[id] = null;
             });
