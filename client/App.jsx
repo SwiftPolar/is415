@@ -271,6 +271,14 @@ export default class extends React.Component {
 
     }
 
+    exportStops() {
+        Meteor.call('exportBusCoords', (err, res) => {
+           if(!err || res.length > 0) {
+               window.open('data:application/json;charset=utf-8,' + JSON.stringify(res));
+           }
+        });
+    }
+
     render() {
         return (
             <div style={{width: "100%", height: "100%"}}>
@@ -365,6 +373,8 @@ export default class extends React.Component {
                                 <LinearProgress mode="determinate" value={this.state.loading} max={1}/>
                                 {this.state.results}
                             </CardText>
+                            <RaisedButton label="Export Bus Stops" primary={true} fullWidth={true}
+                                          onTouchTap={this.exportStops.bind(this)}/>
                         </Card>
                         {this.getResults()}
 

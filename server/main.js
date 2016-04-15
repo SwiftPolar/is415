@@ -318,6 +318,32 @@ Meteor.methods({
         return results;
     },
 
+    exportBusCoords: function () {
+        let busCoords = requestHistory[this.connection.id]["bus"];
+        if(!busCoords) {
+            return [];
+        } else {
+            let results = [];
+            busCoords.map((coords) => {
+                let obj = {
+                    "type": "Feature",
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": coords
+                    },
+                    "properties": {}
+                };
+                results.push(obj);
+
+            });
+            return {
+                "type": "FeatureCollection",
+                "features": results
+            }
+        }
+
+    },
+
     getPoi: function (busCoords, category, walking) {
         let ids = {};
         let poi = [];
