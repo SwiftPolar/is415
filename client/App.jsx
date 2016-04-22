@@ -20,7 +20,7 @@ import LinearProgress from 'material-ui/lib/linear-progress';
 import List from 'material-ui/lib/lists/list';
 import ListItem from 'material-ui/lib/lists/list-item';
 
-var location;
+var location, legendStops;
 
 
 export default class extends React.Component {
@@ -50,6 +50,11 @@ export default class extends React.Component {
         this.setState({sidebarWidth: window.innerWidth * 0.2});
     }
 
+    componentWillUpdate(nextProps, nextState) {
+        map.removeControl(legendStops);
+        map.addControl(legendStops);
+    }
+
 
     componentDidMount() {
         window.addEventListener("resize", this.updateSidebar.bind(this));
@@ -65,13 +70,13 @@ export default class extends React.Component {
 
         L.tileLayer.provider('OpenStreetMap.Mapnik').addTo(map);
 
-        let redMarker = L.AwesomeMarkers.icon({
-            markerColor: 'red',
+        let greenMarker = L.AwesomeMarkers.icon({
+            markerColor: 'green',
             prefix: 'fa',
             icon: 'fa-location-arrow'
         });
 
-        location = L.marker([0, 0], {icon: redMarker}).addTo(map);
+        location = L.marker([0, 0], {icon: greenMarker}).addTo(map);
 
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition((position) => {
@@ -87,6 +92,31 @@ export default class extends React.Component {
         Meteor.call('getCategories', (err, res) => {
             this.setState({categories: res.sort()});
         });
+
+        legendStops = L.control({position: 'bottomleft'});
+
+        legendStops.onAdd = (map) => {
+
+            var div = L.DomUtil.create('div', 'info legend');
+
+            let numStops = this.state.inputStops;
+            if(!numStops) {
+                numStops = 0;
+            }
+
+            let firstStop =  Math.floor(numStops / 3);
+            let thirdStop = Math.floor(numStops * 2 /3);
+
+            div.innerHTML += '<b>No. of Stops</b><br>' +
+                '<i style="background:#ffa500;"></i><= ' + firstStop +'<br>' +
+                '<i style="background:#ff0000;"></i>> ' + firstStop +' <= ' + thirdStop + '<br>' +
+                '<i style="background:#8b0000;"></i>> ' + thirdStop +'<br>';
+
+
+            return div;
+        };
+
+        legendStops.addTo(map);
 
 
     }
@@ -233,6 +263,17 @@ export default class extends React.Component {
                         this.setState({results: "Completed", loading: 1});
                         Meteor.call('getResults', (err, res) => {
                             console.log("PROCESSING POI");
+
+                            //color marker for distances
+                            const distance = {
+                                "first": "orange",
+                                "second": "red",
+                                "third": "darkred"
+                            };
+
+                            const inputStops = this.state.inputStops;
+
+
                             const onEachFeature = function (feature, layer) {
                                 // does this feature have a property named popupContent?
                                 if (feature.properties && feature.properties.popup) {
@@ -246,6 +287,22 @@ export default class extends React.Component {
                                     }
 
                                 }
+                                let color = distance['first'];
+                                let numOfStops = feature.properties.numOfStops;
+
+                                if(numOfStops > (2 * inputStops / 3)) {
+                                    color = distance['third'];
+                                } else if (numOfStops > (inputStops / 3)) {
+                                    color = distance['second'];
+                                }
+
+                                let markerIcon = L.AwesomeMarkers.icon({
+                                    markerColor: color,
+                                    //prefix: 'fa',
+                                    //icon: 'fa-location-arrow'
+                                });
+
+                                layer.setIcon(markerIcon);
                             };
 
                             let geojsonFeature = {

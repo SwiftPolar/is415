@@ -12,6 +12,8 @@ var getBusID = function (obj) {
 
 var userRequest = {};
 var requestHistory = {};
+var stopsInfo = {};
+var coordsToStop = {};
 
 Meteor.methods({
     getCategories: () => {
@@ -22,6 +24,10 @@ Meteor.methods({
     getStops: function (startLocation, numStops, routeChange, walking, category) {
         this.unblock();
         let requestId = this.connection.id;
+
+        //store total stops that is requested so as to be able to calculate and store info later
+        var totalStops = numStops;
+
         if (userRequest[requestId]) {
             if (typeof userRequest[requestId] === "object") {
                 //new request check if request only changes the category
@@ -51,6 +57,8 @@ Meteor.methods({
                 category: category
             };
         }
+
+        var stopInfo = {};
 
         //initialize variables
         var results = {};
@@ -104,6 +112,9 @@ Meteor.methods({
             start = getBusID([start]);
             start.map((id) => {
                 results[id] = null;
+
+                //store starting bus stop id
+                stopInfo['start'] = id;
             });
 
             //get all buses for bus stop
@@ -144,8 +155,12 @@ Meteor.methods({
                     //if bus stop exists, meaning not the end of the route yet
                     if (route) {
                         let stop = route["BusStopCode"];
+
                         if (!(stop in results)) {
                             results[stop] = null;
+
+                            //store bus stop and number of stops to reach
+                            stopInfo[stop] = i;
                         }
 
 
@@ -248,6 +263,8 @@ Meteor.methods({
                         let sequence = route.start;
                         let change = route.routeChange;
 
+                        let prevNumStops = totalStops - numStops;
+
                         for (let i = 1; i <= numStops; i++) {
                             let stopCode = tempCollection.findOne({
                                 "ServiceNo": service,
@@ -259,6 +276,9 @@ Meteor.methods({
                                 let stop = stopCode["BusStopCode"];
                                 if (!(stop in results)) {
                                     results[stop] = null;
+
+                                    //store number of stops to get there
+                                    stopInfo[stop] = prevNumStops + i;
                                 }
 
                                 let tempStops = numStops - i;
@@ -298,6 +318,8 @@ Meteor.methods({
         loop();
         userRequest[requestId] = 0.75;
 
+        stopsInfo[requestId] = stopInfo;
+
         //now results key contains all bus stop codes that we need to search
         // we will now search the location coordinates for each bus stop
         let busCoords = Meteor.call('getBusCoords', Object.keys(results));
@@ -310,12 +332,20 @@ Meteor.methods({
     },
 
     getBusCoords: function (stops) {
-        let arr = BusStops.find({"id": {"$in": stops}}, {fields: {"geometry.coordinates": 1}}).fetch();
+        let arr = BusStops.find({"id": {"$in": stops}}, {fields: {"geometry.coordinates": 1, "id": 1}}).fetch();
         results = [];
+        coordsMap = {};
         arr.map((val) => {
             results.push(val.geometry.coordinates);
+            coordsMap[val.geometry.coordinates] = val.id;
         });
+
+        coordsToStop[this.connection.id] = coordsMap;
         return results;
+    },
+
+    getStopsInfo: function () {
+      return stopsInfo[this.connection.id];
     },
 
     exportBusCoords: function () {
@@ -347,6 +377,9 @@ Meteor.methods({
     getPoi: function (busCoords, category, walking) {
         let ids = {};
         let poi = [];
+        let coordsMap = coordsToStop[this.connection.id];
+        let stopInfo = stopsInfo[this.connection.id];
+
         busCoords.map((coords) => {
             let temp = Pois.find({
                 "properties.category": category,
@@ -364,6 +397,15 @@ Meteor.methods({
                 let id = obj._id;
                 if (!ids[id]) {
                     ids[id] = true;
+                    let busStopCode = coordsMap[coords];
+
+                    obj.properties.busStopCode = busStopCode;
+                    let stops = stopInfo[busStopCode];
+                    if(!stops) {
+                        stops = 0;
+                    }
+                    obj.properties.numOfStops = stops;
+
                     poi.push(obj);
                 }
             });
